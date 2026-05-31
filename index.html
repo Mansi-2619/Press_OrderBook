@@ -556,7 +556,7 @@
       <div class="form-row">
         <div class="form-group">
           <label>Order Type *</label>
-          <select id="f-type">
+          <select id="f-type" onchange="toggleOtherField()">
             <option value="">— Select —</option>
             <option>Wedding Cards</option>
             <option>Receipt Books</option>
@@ -572,9 +572,40 @@
           <input type="number" id="f-qty" placeholder="e.g. 500" min="1">
         </div>
       </div>
-      <div class="form-group">
-        <label>Description / Specs</label>
-        <textarea id="f-desc" placeholder="Paper type, size, colour, special instructions…"></textarea>
+      <div class="form-group" id="other-type-group" style="display:none">
+        <label>Specify Order Type *</label>
+        <input type="text" id="f-other-type" placeholder="e.g. Letterhead, Pamphlet…">
+      </div>
+      <div class="section-divider">Print Specifications</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Paper</label>
+          <input type="text" id="f-paper" placeholder="e.g. Maplitho 70gsm">
+        </div>
+        <div class="form-group">
+          <label>Size</label>
+          <input type="text" id="f-size" placeholder="e.g. A4, 12×18">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Part</label>
+          <input type="text" id="f-part" placeholder="e.g. 2-part, 3-part">
+        </div>
+        <div class="form-group">
+          <label>Numbering</label>
+          <input type="text" id="f-numbering" placeholder="e.g. 001–500">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Binding</label>
+          <input type="text" id="f-binding" placeholder="e.g. Spiral, Staple, Perfect">
+        </div>
+        <div class="form-group">
+          <label>Rate (₹)</label>
+          <input type="number" id="f-rate" placeholder="e.g. 5" min="0">
+        </div>
       </div>
       <div class="section-divider">Dates & Pricing</div>
       <div class="form-row">
@@ -616,10 +647,6 @@
             <option>Paid</option>
           </select>
         </div>
-      </div>
-      <div class="form-group">
-        <label>Notes</label>
-        <textarea id="f-notes" placeholder="Any additional notes…" style="min-height:50px"></textarea>
       </div>
     </div>
     <div class="modal-footer">
@@ -693,19 +720,27 @@
     return new Date().toISOString().split('T')[0];
   }
 
+  function toggleOtherField() {
+    const val = document.getElementById('f-type').value;
+    document.getElementById('other-type-group').style.display = val === 'Other' ? 'block' : 'none';
+    if (val !== 'Other') document.getElementById('f-other-type').value = '';
+  }
+
   function openNewModal() {
     editingId = null;
     document.getElementById('modal-title').textContent = 'New Order';
     document.getElementById('edit-id').value = '';
-    ['f-name','f-phone','f-desc','f-notes'].forEach(id => document.getElementById(id).value = '');
+    ['f-name','f-phone','f-other-type','f-paper','f-size','f-part','f-numbering','f-binding'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('f-type').value = '';
     document.getElementById('f-qty').value = '';
+    document.getElementById('f-rate').value = '';
     document.getElementById('f-date').value = today();
     document.getElementById('f-due').value = '';
     document.getElementById('f-amount').value = '';
     document.getElementById('f-advance').value = '';
     document.getElementById('f-delivery').value = 'Pending';
     document.getElementById('f-payment').value = 'Unpaid';
+    document.getElementById('other-type-group').style.display = 'none';
     document.getElementById('order-modal').classList.add('open');
   }
 
@@ -717,22 +752,38 @@
     document.getElementById('edit-id').value = id;
     document.getElementById('f-name').value = o.name;
     document.getElementById('f-phone').value = o.phone || '';
-    document.getElementById('f-type').value = o.type;
+    // Handle "Other" type
+    const knownTypes = ['Wedding Cards','Receipt Books','Binding','Certificates','Report Cards','Magazine','Other'];
+    if (knownTypes.includes(o.type)) {
+      document.getElementById('f-type').value = o.type;
+      document.getElementById('f-other-type').value = o.otherType || '';
+      document.getElementById('other-type-group').style.display = o.type === 'Other' ? 'block' : 'none';
+    } else {
+      document.getElementById('f-type').value = 'Other';
+      document.getElementById('f-other-type').value = o.type;
+      document.getElementById('other-type-group').style.display = 'block';
+    }
     document.getElementById('f-qty').value = o.qty || '';
-    document.getElementById('f-desc').value = o.desc || '';
+    document.getElementById('f-paper').value = o.paper || '';
+    document.getElementById('f-size').value = o.size || '';
+    document.getElementById('f-part').value = o.part || '';
+    document.getElementById('f-numbering').value = o.numbering || '';
+    document.getElementById('f-binding').value = o.binding || '';
+    document.getElementById('f-rate').value = o.rate || '';
     document.getElementById('f-date').value = o.date || '';
     document.getElementById('f-due').value = o.due || '';
     document.getElementById('f-amount').value = o.amount || '';
     document.getElementById('f-advance').value = o.advance || '';
     document.getElementById('f-delivery').value = o.delivery;
     document.getElementById('f-payment').value = o.payment;
-    document.getElementById('f-notes').value = o.notes || '';
     document.getElementById('order-modal').classList.add('open');
   }
 
   async function saveOrder() {
     const name = document.getElementById('f-name').value.trim();
-    const type = document.getElementById('f-type').value;
+    const typeRaw = document.getElementById('f-type').value;
+    const otherTypeVal = document.getElementById('f-other-type').value.trim();
+    const type = typeRaw === 'Other' ? (otherTypeVal || 'Other') : typeRaw;
     const orderDate = document.getElementById('f-date').value;
     const dueDate = document.getElementById('f-due').value;
     const phone = document.getElementById('f-phone').value.trim();
@@ -753,7 +804,8 @@
       }
     }
 
-    if (!type) { alert('Please select order type.'); return; }
+    if (!typeRaw) { alert('Please select order type.'); return; }
+    if (typeRaw === 'Other' && !otherTypeVal) { alert('Please specify the order type.'); return; }
 
     // Quantity — must be a positive whole number if provided
     if (qty && (isNaN(qty) || parseInt(qty) <= 0 || !Number.isInteger(parseFloat(qty)))) {
@@ -780,15 +832,20 @@
       name,
       phone: phone.replace(/\s|-/g, ''),
       type,
+      otherType: typeRaw === 'Other' ? otherTypeVal : '',
       qty: qty ? parseInt(qty) : '',
-      desc: document.getElementById('f-desc').value.trim(),
+      paper: document.getElementById('f-paper').value.trim(),
+      size: document.getElementById('f-size').value.trim(),
+      part: document.getElementById('f-part').value.trim(),
+      numbering: document.getElementById('f-numbering').value.trim(),
+      binding: document.getElementById('f-binding').value.trim(),
+      rate: parseFloat(document.getElementById('f-rate').value) || '',
       date: orderDate,
       due: dueDate,
       amount,
       advance,
       delivery: document.getElementById('f-delivery').value,
       payment: document.getElementById('f-payment').value,
-      notes: document.getElementById('f-notes').value.trim(),
     };
 
     // auto-calc payment status
@@ -830,12 +887,22 @@
           <div class="detail-item"><label>Order Date</label><span>${o.date || '—'}</span></div>
           <div class="detail-item"><label>Due Date</label><span>${o.due || '—'}</span></div>
           <div class="detail-item"><label>Quantity</label><span>${o.qty || '—'}</span></div>
+          <div class="detail-item"><label>Rate (₹)</label><span>${o.rate || '—'}</span></div>
           <div class="detail-item"><label>Total Amount</label><span>₹${o.amount.toLocaleString('en-IN')}</span></div>
           <div class="detail-item"><label>Advance Paid</label><span>₹${o.advance.toLocaleString('en-IN')}</span></div>
           <div class="detail-item"><label>Balance Due</label><span style="color:${balance > 0 ? '#c0440a' : '#4a7c59'};font-weight:700">₹${balance.toLocaleString('en-IN')}</span></div>
         </div>
-        ${o.desc ? `<div style="margin-top:1rem"><div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);font-weight:600;margin-bottom:4px">Description</div><div style="font-size:0.875rem;color:var(--ink)">${o.desc}</div></div>` : ''}
-        ${o.notes ? `<div style="margin-top:0.75rem"><div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);font-weight:600;margin-bottom:4px">Notes</div><div style="font-size:0.875rem;color:var(--ink)">${o.notes}</div></div>` : ''}
+        ${(o.paper||o.size||o.part||o.numbering||o.binding) ? `
+        <div style="margin-top:1rem">
+          <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);font-weight:600;margin-bottom:6px">Print Specs</div>
+          <div class="detail-grid">
+            ${o.paper ? `<div class="detail-item"><label>Paper</label><span>${o.paper}</span></div>` : ''}
+            ${o.size ? `<div class="detail-item"><label>Size</label><span>${o.size}</span></div>` : ''}
+            ${o.part ? `<div class="detail-item"><label>Part</label><span>${o.part}</span></div>` : ''}
+            ${o.numbering ? `<div class="detail-item"><label>Numbering</label><span>${o.numbering}</span></div>` : ''}
+            ${o.binding ? `<div class="detail-item"><label>Binding</label><span>${o.binding}</span></div>` : ''}
+          </div>
+        </div>` : ''}
       </div>
     `;
     document.getElementById('detail-footer').innerHTML = `
@@ -869,7 +936,12 @@
         <hr class="bill-divider">
         <div class="bill-row"><span>Order Type</span><span>${o.type}</span></div>
         <div class="bill-row"><span>Quantity</span><span>${o.qty || '—'}</span></div>
-        ${o.desc ? `<div style="font-size:0.82rem;color:var(--muted);margin:4px 0">${o.desc}</div>` : ''}
+        ${o.paper ? `<div class="bill-row"><span>Paper</span><span>${o.paper}</span></div>` : ''}
+        ${o.size ? `<div class="bill-row"><span>Size</span><span>${o.size}</span></div>` : ''}
+        ${o.part ? `<div class="bill-row"><span>Part</span><span>${o.part}</span></div>` : ''}
+        ${o.numbering ? `<div class="bill-row"><span>Numbering</span><span>${o.numbering}</span></div>` : ''}
+        ${o.binding ? `<div class="bill-row"><span>Binding</span><span>${o.binding}</span></div>` : ''}
+        ${o.rate ? `<div class="bill-row"><span>Rate</span><span>₹${o.rate}</span></div>` : ''}
         <hr class="bill-divider">
         <div class="bill-row"><span>Total Amount</span><span>₹${o.amount.toLocaleString('en-IN')}</span></div>
         <div class="bill-row"><span>Advance Received</span><span>₹${o.advance.toLocaleString('en-IN')}</span></div>
@@ -877,7 +949,6 @@
         <hr class="bill-divider">
         <div class="bill-row"><span>Payment Status</span><span>${o.payment}</span></div>
         <div class="bill-row"><span>Delivery Status</span><span>${o.delivery}</span></div>
-        ${o.notes ? `<div style="margin-top:0.75rem;font-size:0.8rem;color:var(--muted)">Note: ${o.notes}</div>` : ''}
         <div style="margin-top:1.5rem;font-size:0.75rem;color:var(--muted);text-align:center;border-top:1px solid var(--border);padding-top:0.75rem">Thank you for your order!</div>
       </div>
     `;
@@ -1022,6 +1093,7 @@
 
   // Expose functions globally so onclick attributes work with ES modules
   window.openNewModal = openNewModal;
+  window.toggleOtherField = toggleOtherField;
   window.openEditModal = openEditModal;
   window.saveOrder = saveOrder;
   window.deleteOrder = deleteOrder;
